@@ -36,10 +36,12 @@
     fi
 
 - name: Run forge tests (JSON)
-  run: forge test --json > forge-test.json
+  run: |
+    forge test --json > forge-test.json
 
 - name: Run Slither (JSON + SARIF)
-  run: slither ./src --json slither.json --sarif slither.sarif || true
+  run: |
+    slither ./src --json slither.json --sarif slither.sarif || true
 
 - name: Upload artifacts (reports)
   uses: actions/upload-artifact@v4
