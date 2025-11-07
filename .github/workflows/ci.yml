@@ -1,0 +1,69 @@
+  - name: Cache Foundry
+    uses: actions/cache@v4
+    with:
+      path: |
+        ~/.foundry
+        ~/.cache/foundry
+      key: ${{ runner.os }}-foundry-${{ hashFiles('**/foundry.toml') }}
+
+  - name: Install Foundry (forge + cast)
+    run: |
+      curl -L https://foundry.paradigm.xyz | bash
+      export PATH="$HOME/.foundry/bin:$PATH"
+      foundryup
+    env:
+      FOUNDRY_SKIP_PROMPT: "1"
+
+  - name: Ensure solc is available
+    run: |
+      sudo apt-get update
+      sudo apt-get install -y software-properties-common
+      sudo add-apt-repository -y ppa:ethereum/ethereum
+      sudo apt-get update
+      sudo apt-get install -y solc
+    # If you prefer a specific solc, tell me and I can pin a version.
+
+  - name: Setup Python & install Slither
+    run: |
+      python3 -m pip install --upgrade pip
+      pip3 install slither-analyzer
+      # optional: pip3 install solc-select && solc-select install <version> && solc-select use <version>
+
+  - name: Install repo dependencies (optional)
+    run: |
+      export PATH="$HOME/.foundry/bin:$PATH"
+      # If your repo requires any additional setup (forge install / npm / etc), do it here
+      if [ -f foundry.toml ]; then
+        forge install || true
+      fi
+
+  - name: Run forge tests (JSON)
+    env:
+      PATH: ${{ runner.env.PATH }}:$HOME/.foundry/bin
+    run: |
+      export PATH="$HOME/.foundry/bin:$PATH"
+      # Use --json to produce machine-readable output. Remove redirect if you want console output too.
+      forge test --json > forge-test.json
+    continue-on-error: false
+
+  - name: Run Slither (JSON + SARIF)
+    env:
+      PATH: ${{ runner.env.PATH }}:$HOME/.foundry/bin
+    run: |
+      export PATH="$HOME/.foundry/bin:$PATH"
+      # Do not fail the job for slither findings by default; remove "|| true" if you want it to fail.
+      slither . --json slither.json --sarif slither.sarif || true
+
+  - name: Upload artifacts (reports)
+    uses: actions/upload-artifact@v4
+    with:
+      name: security-and-test-reports
+      path: |
+        forge-test.json
+        slither.json
+        slither.sarif
+
+  - name: Upload SARIF to GitHub (code scanning)
+    uses: github/codeql-action/upload-sarif@v2
+    with:
+      sarif_file: slither.sarif
